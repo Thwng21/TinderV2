@@ -73,7 +73,7 @@ A complete Tinder-like backend application built with Node.js, Express, MongoDB,
    ```env
    PORT=3000
    NODE_ENV=development
-   MONGODB_URI=mongodb+srv://tinder:nhom3conbao@tinderv2.ejfnrvl.mongodb.net/?retryWrites=true&w=majority&appName=TinderV2
+   MONGODB_URI=mongodb+srv://tinder:<matkhau>@tinderv2.ejfnrvl.mongodb.net/?retryWrites=true&w=majority&appName=TinderV2
    JWT_SECRET=your_jwt_secret_key_here_change_in_production
    JWT_EXPIRES_IN=7d
    FRONTEND_URL=http://localhost:8081
