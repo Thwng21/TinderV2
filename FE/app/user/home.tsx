@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   SafeAreaView,
-  ScrollView,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
@@ -13,12 +12,15 @@ import {
   StatusBar,
   PanResponder,
   Animated,
+  Platform,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { router } from 'expo-router';
 import { Ionicons, MaterialIcons, FontAwesome5, AntDesign } from '@expo/vector-icons';
 
+
 const { width, height } = Dimensions.get('window');
+const CARD_HEIGHT = height * 0.68;
 
 // Mock data with more diverse profiles
 const mockProfiles = [
@@ -73,6 +75,7 @@ export default function UserHomeScreen() {
   const [matchCount, setMatchCount] = useState(0);
   const [pan] = useState(new Animated.ValueXY());
   const [cardOpacity] = useState(new Animated.Value(1));
+  const [scale] = useState(new Animated.Value(1));
 
   useEffect(() => {
     if (!user) {
@@ -82,48 +85,67 @@ export default function UserHomeScreen() {
 
   const panResponder = PanResponder.create({
     onMoveShouldSetPanResponder: (evt, gestureState) => {
-      return Math.abs(gestureState.dx) > 20;
+      return Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10;
     },
     onPanResponderMove: (evt, gestureState) => {
-      pan.setValue({ x: gestureState.dx, y: 0 });
-      const opacity = Math.max(0.3, 1 - Math.abs(gestureState.dx) / width);
+      pan.setValue({ x: gestureState.dx, y: gestureState.dy });
+      const opacity = Math.max(0.5, 1 - Math.abs(gestureState.dx) / width);
       cardOpacity.setValue(opacity);
     },
     onPanResponderRelease: (evt, gestureState) => {
-      const swipeThreshold = width * 0.25;
+      const swipeThreshold = width * 0.3;
       
       if (gestureState.dx > swipeThreshold) {
-        // Swipe right - Like
         swipeRight();
       } else if (gestureState.dx < -swipeThreshold) {
-        // Swipe left - Pass
         swipeLeft();
       } else {
-        // Return to center
         Animated.parallel([
-          Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }),
-          Animated.timing(cardOpacity, { toValue: 1, duration: 200, useNativeDriver: false })
+          Animated.spring(pan, { 
+            toValue: { x: 0, y: 0 }, 
+            useNativeDriver: false,
+            friction: 5 
+          }),
+          Animated.timing(cardOpacity, { 
+            toValue: 1, 
+            duration: 200, 
+            useNativeDriver: false 
+          })
         ]).start();
       }
     },
   });
 
   const swipeLeft = () => {
-    Animated.timing(pan, {
-      toValue: { x: -width, y: 0 },
-      duration: 300,
-      useNativeDriver: false,
-    }).start(() => {
+    Animated.parallel([
+      Animated.timing(pan, {
+        toValue: { x: -width * 1.2, y: 0 },
+        duration: 250,
+        useNativeDriver: false,
+      }),
+      Animated.timing(cardOpacity, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      })
+    ]).start(() => {
       nextProfile();
     });
   };
 
   const swipeRight = () => {
-    Animated.timing(pan, {
-      toValue: { x: width, y: 0 },
-      duration: 300,
-      useNativeDriver: false,
-    }).start(() => {
+    Animated.parallel([
+      Animated.timing(pan, {
+        toValue: { x: width * 1.2, y: 0 },
+        duration: 250,
+        useNativeDriver: false,
+      }),
+      Animated.timing(cardOpacity, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: false,
+      })
+    ]).start(() => {
       handleLike();
     });
   };
@@ -148,7 +170,7 @@ export default function UserHomeScreen() {
 
   const handleLike = () => {
     setLikeCount(prev => prev + 1);
-    if (Math.random() > 0.7) { // 30% chance of match
+    if (Math.random() > 0.7) {
       setMatchCount(prev => prev + 1);
       Alert.alert('🎉 It\'s a Match!', 'Bạn và ' + mockProfiles[currentProfileIndex].name + ' đã match!');
     }
@@ -160,7 +182,6 @@ export default function UserHomeScreen() {
   };
 
   const nextProfile = () => {
-    // Reset card position and opacity
     pan.setValue({ x: 0, y: 0 });
     cardOpacity.setValue(1);
     
@@ -170,17 +191,6 @@ export default function UserHomeScreen() {
       setCurrentProfileIndex(0);
     }
   };
-
-  interface Profile {
-    id: number;
-    name: string;
-    age: number;
-    distance: string;
-    bio: string;
-    image: string | null;
-    verified: boolean;
-    interests: string[];
-  }
 
   interface InterestsProps {
     interests: string[];
@@ -203,7 +213,7 @@ export default function UserHomeScreen() {
     
     const rotateZ = pan.x.interpolate({
       inputRange: [-width / 2, 0, width / 2],
-      outputRange: ['-10deg', '0deg', '10deg'],
+      outputRange: ['-15deg', '0deg', '15deg'],
       extrapolate: 'clamp',
     });
 
@@ -216,6 +226,7 @@ export default function UserHomeScreen() {
             {
               transform: [
                 { translateX: pan.x },
+                { translateY: pan.y },
                 { rotateZ: rotateZ },
               ],
               opacity: cardOpacity,
@@ -228,13 +239,13 @@ export default function UserHomeScreen() {
             styles.likeIndicator,
             {
               opacity: pan.x.interpolate({
-                inputRange: [0, width * 0.25],
+                inputRange: [0, width * 0.3],
                 outputRange: [0, 1],
                 extrapolate: 'clamp',
               })
             }
           ]}>
-            <Text style={styles.likeIndicatorText}>LIKE</Text>
+            <AntDesign name="heart" size={50} color="#4CAF50" />
           </Animated.View>
           
           <Animated.View style={[
@@ -242,42 +253,55 @@ export default function UserHomeScreen() {
             styles.passIndicator,
             {
               opacity: pan.x.interpolate({
-                inputRange: [-width * 0.25, 0],
+                inputRange: [-width * 0.3, 0],
                 outputRange: [1, 0],
                 extrapolate: 'clamp',
               })
             }
           ]}>
-            <Text style={styles.passIndicatorText}>PASS</Text>
+            <MaterialIcons name="close" size={50} color="#f44336" />
           </Animated.View>
 
-          {/* Profile Image with gradient overlay */}
+          {/* Profile Image */}
           <View style={styles.imageContainer}>
             <View style={styles.imagePlaceholder}>
               <Text style={styles.imagePlaceholderText}>
                 {profile.name.charAt(0)}
               </Text>
             </View>
-            <View style={styles.gradientOverlay} />
+            
+            {/* Gradient overlay for better text visibility */}
+            <View style={styles.gradientOverlay}>
+              <View style={styles.gradientInner} />
+            </View>
             
             {profile.verified && (
               <View style={styles.verifiedBadge}>
-                <Text style={styles.verifiedText}>✓</Text>
+                <Ionicons name="checkmark-circle" size={32} color="#2196F3" />
               </View>
             )}
             
             {/* Profile info overlay */}
             <View style={styles.profileInfoOverlay}>
-              <View style={styles.nameRow}>
-                <Text style={styles.profileName}>
-                  {profile.name}, {profile.age}
-                </Text>
-                <View style={styles.distanceContainer}>
-                  <Ionicons name="location" size={14} color="#666" />
-                  <Text style={styles.distance}>{profile.distance}</Text>
+              <View style={styles.profileHeader}>
+                <View style={styles.nameSection}>
+                  <Text style={styles.profileName}>
+                    {profile.name}, {profile.age}
+                  </Text>
+                  <View style={styles.distanceTag}>
+                    <Ionicons name="location-sharp" size={12} color="#fff" />
+                    <Text style={styles.distance}>{profile.distance}</Text>
+                  </View>
                 </View>
+                <TouchableOpacity style={styles.infoButton}>
+                  <Ionicons name="information-circle-outline" size={28} color="#fff" />
+                </TouchableOpacity>
               </View>
-              <Text style={styles.profileBio}>{profile.bio}</Text>
+              
+              <Text style={styles.profileBio} numberOfLines={2}>
+                {profile.bio}
+              </Text>
+              
               {renderInterests(profile.interests)}
             </View>
           </View>
@@ -286,27 +310,43 @@ export default function UserHomeScreen() {
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
           <TouchableOpacity 
-            style={styles.passButton} 
+            style={[styles.actionButton, styles.rewindButton]} 
+            onPress={() => Alert.alert('Rewind', 'Quay lại profile trước!')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-undo" size={24} color="#FFC107" />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.passButtonLarge]} 
             onPress={handlePass}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
-            <MaterialIcons name="close" size={28} color="white" />
+            <MaterialIcons name="close" size={32} color="#f44336" />
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={styles.superLikeButton} 
+            style={[styles.actionButton, styles.superLikeButton]} 
             onPress={() => Alert.alert('Super Like', 'Super Like gửi đi!')}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
-            <AntDesign name="star" size={24} color="white" />
+            <AntDesign name="star" size={28} color="#2196F3" />
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={styles.likeButton} 
+            style={[styles.actionButton, styles.likeButtonLarge]} 
             onPress={() => swipeRight()}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
-            <AntDesign name="heart" size={30} color="white" />
+            <AntDesign name="heart" size={32} color="#4CAF50" />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.boostButton]} 
+            onPress={() => Alert.alert('Boost', 'Tính năng Boost!')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="flash" size={24} color="#9C27B0" />
           </TouchableOpacity>
         </View>
       </View>
@@ -324,11 +364,15 @@ export default function UserHomeScreen() {
       case 'matches':
         return (
           <View style={styles.emptyTab}>
-            <FontAwesome5 name="heart" size={50} color="#ddd" />
-            <Text style={styles.emptyText}>Bạn có {matchCount} matches</Text>
+            <View style={styles.emptyIconContainer}>
+              <AntDesign name="heart" size={60} color="#e91e63" />
+            </View>
+            <Text style={styles.emptyText}>
+              {matchCount === 0 ? 'Chưa có match' : `${matchCount} Matches`}
+            </Text>
             <Text style={styles.emptySubText}>
               {matchCount === 0 
-                ? 'Hãy tiếp tục khám phá để tìm kiếm!' 
+                ? 'Hãy tiếp tục vuốt để tìm người phù hợp!' 
                 : 'Nhấn vào match để bắt đầu trò chuyện!'
               }
             </Text>
@@ -337,9 +381,28 @@ export default function UserHomeScreen() {
       case 'messages':
         return (
           <View style={styles.emptyTab}>
-            <Ionicons name="chatbubble-outline" size={50} color="#ddd" />
+            <View style={styles.emptyIconContainer}>
+              <Ionicons name="chatbubbles" size={60} color="#e91e63" />
+            </View>
             <Text style={styles.emptyText}>Chưa có tin nhắn</Text>
-            <Text style={styles.emptySubText}>Khi có match, bạn có thể bắt đầu trò chuyện!</Text>
+            <Text style={styles.emptySubText}>
+              Khi có match, bạn có thể bắt đầu trò chuyện ngay!
+            </Text>
+          </View>
+        );
+      case 'profile':
+        return (
+          <View style={styles.emptyTab}>
+            <View style={styles.emptyIconContainer}>
+              <Ionicons name="person" size={60} color="#e91e63" />
+            </View>
+            <Text style={styles.emptyText}>Hồ sơ của bạn</Text>
+            <Text style={styles.emptySubText}>
+              Chỉnh sửa thông tin và ảnh của bạn
+            </Text>
+            <TouchableOpacity style={styles.editProfileButton}>
+              <Text style={styles.editProfileButtonText}>Chỉnh sửa hồ sơ</Text>
+            </TouchableOpacity>
           </View>
         );
       default:
@@ -357,13 +420,13 @@ export default function UserHomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#e91e63" />
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       
-      {/* Header */}
+      {/* Modern Header */}
       <View style={styles.header}>
         <TouchableOpacity 
-          style={styles.headerButton}
-          onPress={() => Alert.alert('Profile', 'Tính năng sắp ra mắt!')}
+          style={styles.headerIconButton}
+          onPress={() => setActiveTab('profile')}
         >
           <View style={styles.userAvatar}>
             <Text style={styles.userAvatarText}>
@@ -373,65 +436,16 @@ export default function UserHomeScreen() {
         </TouchableOpacity>
         
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>tinder</Text>
+          <View style={styles.logoContainer}>
+            <Ionicons name="flame" size={32} color="#e91e63" />
+          </View>
         </View>
         
         <TouchableOpacity 
-          style={styles.headerButton}
+          style={styles.headerIconButton}
           onPress={handleLogout}
         >
-          <Ionicons name="settings-outline" size={24} color="white" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Search Bar - only show in discover tab */}
-      {activeTab === 'discover' && (
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBar}>
-            <Text style={styles.searchIcon}>🔍</Text>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Tìm kiếm theo tên, sở thích..."
-              placeholderTextColor="#999"
-              value={searchText}
-              onChangeText={setSearchText}
-            />
-            {searchText.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchText('')}>
-                <Text style={styles.clearIcon}>✕</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      )}
-
-      {/* Tab Navigation */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'discover' && styles.activeTab]}
-          onPress={() => setActiveTab('discover')}
-        >
-          <Text style={[styles.tabText, activeTab === 'discover' && styles.activeTabText]}>
-            Khám phá
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'matches' && styles.activeTab]}
-          onPress={() => setActiveTab('matches')}
-        >
-          <Text style={[styles.tabText, activeTab === 'matches' && styles.activeTabText]}>
-            Matches {matchCount > 0 && `(${matchCount})`}
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'messages' && styles.activeTab]}
-          onPress={() => setActiveTab('messages')}
-        >
-          <Text style={[styles.tabText, activeTab === 'messages' && styles.activeTabText]}>
-            Tin nhắn
-          </Text>
+          <Ionicons name="settings-outline" size={28} color="#666" />
         </TouchableOpacity>
       </View>
 
@@ -440,23 +454,63 @@ export default function UserHomeScreen() {
         {renderTabContent()}
       </View>
 
-      {/* Bottom Stats - only show in discover tab */}
-      {activeTab === 'discover' && (
-        <View style={styles.bottomStats}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{likeCount}</Text>
-            <Text style={styles.statLabel}>Likes</Text>
+      {/* Modern Bottom Navigation */}
+      <View style={styles.bottomNav}>
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => setActiveTab('discover')}
+        >
+          <Ionicons 
+            name={activeTab === 'discover' ? 'flame' : 'flame-outline'} 
+            size={28} 
+            color={activeTab === 'discover' ? '#e91e63' : '#999'} 
+          />
+          {activeTab === 'discover' && <View style={styles.activeIndicator} />}
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => setActiveTab('matches')}
+        >
+          <View>
+            <AntDesign 
+              name="star" 
+              size={26} 
+              color={activeTab === 'matches' ? '#e91e63' : '#999'} 
+            />
+            {matchCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{matchCount}</Text>
+              </View>
+            )}
           </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>0</Text>
-            <Text style={styles.statLabel}>Super Likes</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{matchCount}</Text>
-            <Text style={styles.statLabel}>Matches</Text>
-          </View>
-        </View>
-      )}
+          {activeTab === 'matches' && <View style={styles.activeIndicator} />}
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => setActiveTab('messages')}
+        >
+          <Ionicons 
+            name={activeTab === 'messages' ? 'chatbubbles' : 'chatbubbles-outline'} 
+            size={26} 
+            color={activeTab === 'messages' ? '#e91e63' : '#999'} 
+          />
+          {activeTab === 'messages' && <View style={styles.activeIndicator} />}
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => setActiveTab('profile')}
+        >
+          <Ionicons 
+            name={activeTab === 'profile' ? 'person' : 'person-outline'} 
+            size={26} 
+            color={activeTab === 'profile' ? '#e91e63' : '#999'} 
+          />
+          {activeTab === 'profile' && <View style={styles.activeIndicator} />}
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -464,7 +518,7 @@ export default function UserHomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#fafafa',
   },
   loadingContainer: {
     flex: 1,
@@ -476,101 +530,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: '#e91e63',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  headerButton: {
-    width: 40,
+  headerIconButton: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   headerCenter: {
     flex: 1,
     alignItems: 'center',
   },
-  userAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+  logoContainer: {
     justifyContent: 'center',
     alignItems: 'center',
   },
+  userAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#e91e63',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   userAvatarText: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    letterSpacing: 1,
-  },
-  logoutIcon: {
-    fontSize: 18,
-    color: '#fff',
-  },
-  searchContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#f8f8f8',
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  searchIcon: {
     fontSize: 16,
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-  },
-  clearIcon: {
-    fontSize: 14,
-    color: '#999',
-    marginLeft: 8,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  activeTab: {
-    borderBottomWidth: 3,
-    borderBottomColor: '#e91e63',
-  },
-  tabText: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-  },
-  activeTabText: {
-    color: '#e91e63',
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
   content: {
     flex: 1,
@@ -579,21 +577,22 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingTop: 10,
   },
   cardContainer: {
-    width: width * 0.92,
+    width: width,
     alignItems: 'center',
+    paddingHorizontal: 10,
   },
   profileCard: {
-    width: '100%',
-    height: height * 0.65,
+    width: width - 20,
+    height: CARD_HEIGHT,
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
     elevation: 10,
     overflow: 'hidden',
   },
@@ -608,7 +607,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   imagePlaceholderText: {
-    fontSize: 100,
+    fontSize: 120,
     color: '#fff',
     fontWeight: 'bold',
   },
@@ -617,173 +616,165 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 200,
-    backgroundColor: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
-    
+    height: 250,
+  },
+  gradientInner: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    ...Platform.select({
+      ios: {
+        backgroundColor: 'rgba(0,0,0,0.6)',
+      },
+      android: {
+        backgroundColor: 'rgba(0,0,0,0.6)',
+      },
+    }),
   },
   verifiedBadge: {
     position: 'absolute',
-    top: 16,
-    right: 16,
-    backgroundColor: '#2196F3',
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  verifiedText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
+    top: 20,
+    right: 20,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   profileInfoOverlay: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 24,
   },
-  nameRow: {
+  profileHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  nameSection: {
+    flex: 1,
   },
   profileName: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#fff',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
-  distanceContainer: {
+  distanceTag: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  distanceIcon: {
-    fontSize: 12,
-    marginRight: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    backdropFilter: 'blur(10px)',
   },
   distance: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#fff',
-    opacity: 0.9,
+    marginLeft: 4,
+    fontWeight: '600',
+  },
+  infoButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backdropFilter: 'blur(10px)',
   },
   profileBio: {
     fontSize: 16,
     color: '#fff',
-    lineHeight: 20,
-    marginBottom: 12,
-    opacity: 0.9,
+    lineHeight: 22,
+    marginBottom: 16,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   interestsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 8,
   },
   interestTag: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    backdropFilter: 'blur(10px)',
   },
   interestText: {
     color: '#fff',
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
   },
   swipeIndicator: {
     position: 'absolute',
-    top: '40%',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderWidth: 4,
-    borderRadius: 8,
+    top: '45%',
     zIndex: 1000,
+    padding: 20,
   },
   likeIndicator: {
-    right: 40,
-    borderColor: '#4CAF50',
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
-    transform: [{ rotate: '-20deg' }],
-  },
-  likeIndicatorText: {
-    color: '#4CAF50',
-    fontSize: 32,
-    fontWeight: 'bold',
+    right: 30,
   },
   passIndicator: {
-    left: 40,
-    borderColor: '#f44336',
-    backgroundColor: 'rgba(244, 67, 54, 0.1)',
-    transform: [{ rotate: '20deg' }],
-  },
-  passIndicatorText: {
-    color: '#f44336',
-    fontSize: 32,
-    fontWeight: 'bold',
+    left: 30,
   },
   actionButtons: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,
-    gap: 16,
+    marginTop: 20,
+    paddingHorizontal: 20,
+    gap: 12,
   },
-  passButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
+  actionButton: {
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#fff',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  passButtonText: {
-    fontSize: 20,
-    color: '#999',
+  rewindButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  passButtonLarge: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
   },
   superLikeButton: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
-    backgroundColor: '#2196F3',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#2196F3',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
   },
-  superLikeButtonText: {
-    fontSize: 18,
-    color: '#fff',
+  likeButtonLarge: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
   },
-  likeButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#e91e63',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#e91e63',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  likeButtonText: {
-    fontSize: 20,
-    color: '#fff',
+  boostButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   emptyTab: {
     flex: 1,
@@ -791,43 +782,95 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 40,
   },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#e91e63',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
   },
   emptyText: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 24,
+    fontWeight: 'bold',
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 12,
     textAlign: 'center',
   },
   emptySubText: {
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 24,
   },
-  bottomStats: {
+  editProfileButton: {
+    marginTop: 24,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    backgroundColor: '#e91e63',
+    borderRadius: 25,
+    shadowColor: '#e91e63',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  editProfileButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  bottomNav: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingVertical: 12,
-    backgroundColor: '#f8f8f8',
+    paddingVertical: 8,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+    backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: '#f0f0f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 10,
   },
-  statItem: {
+  navButton: {
+    flex: 1,
     alignItems: 'center',
+    paddingVertical: 8,
+    position: 'relative',
   },
-  statNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#e91e63',
+  activeIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#e91e63',
   },
-  statLabel: {
+  badge: {
+    position: 'absolute',
+    top: -8,
+    right: -10,
+    backgroundColor: '#e91e63',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  badgeText: {
+    color: '#fff',
     fontSize: 11,
-    color: '#666',
-    marginTop: 2,
+    fontWeight: 'bold',
   },
 });

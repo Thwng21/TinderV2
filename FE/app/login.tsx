@@ -70,7 +70,10 @@ export default function LoginScreen() {
           [
             {
               text: 'OK',
-              onPress: () => router.replace('/(tabs)'),
+              onPress: () => {
+                // Redirect will be handled automatically by AuthContext
+                router.replace('/');
+              },
             },
           ]
         );

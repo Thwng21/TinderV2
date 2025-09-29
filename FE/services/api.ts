@@ -8,7 +8,7 @@ const API_BASE_URL = Platform.OS === 'android'
   ? 'http://10.0.2.2:3000/api' 
   : Platform.OS === 'web'
   ? 'http://localhost:3000/api' // Use localhost for web platform
-  : 'http://192.168.1.18:3000/api'; // Use network IP for iOS
+  : 'http://192.168.1.33:3000/api'; // Use network IP for iOS
 
 export interface User {
   _id: string;
